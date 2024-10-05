@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, Switch } from 'reac
 import { Calendar, DateData, LocaleConfig } from 'react-native-calendars';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Habit } from '../types';
+import { Alert } from 'react-native';
 
 // You can customize the locale if needed
 LocaleConfig.locales['en'] = {
@@ -13,25 +14,35 @@ LocaleConfig.locales['en'] = {
 };
 LocaleConfig.defaultLocale = 'en';
 
-export default function CalendarScreen({ route, navigation }) {
-  const [habits, setHabits] = useState<Habit[]>(route.params.habits);
+export default function CalendarScreen({ route }) {
+  console.log("CalendarScreen rendered", route.params);
+  const [habits, setHabits] = useState<Habit[]>(route.params?.habits || []);
   const [selectedDate, setSelectedDate] = useState('');
   const [markedDates, setMarkedDates] = useState({});
 
   useEffect(() => {
-    generateMarkedDates();
+    try {
+      generateMarkedDates();
+    } catch (error) {
+      console.error('Error in generateMarkedDates:', error);
+      Alert.alert('Error', 'There was an issue generating the calendar data.');
+    }
   }, [habits]);
 
   const generateMarkedDates = () => {
     const marked = {};
     habits.forEach(habit => {
+      if (!habit) {
+        console.error("Encountered null or undefined habit in generateMarkedDates");
+        return;
+      }
       const dates = getHabitDates(habit);
       dates.forEach(date => {
         if (!marked[date]) {
           marked[date] = { dots: [] };
         }
         marked[date].dots.push({
-          color: habit.completedDates.includes(date) ? habit.color : 'grey',
+          color: habit.completedDates && habit.completedDates.includes(date) ? habit.color : 'grey',
           key: habit.id.toString()
         });
       });
@@ -40,40 +51,65 @@ export default function CalendarScreen({ route, navigation }) {
   };
 
   const getHabitDates = (habit: Habit) => {
-    const dates = [];
-    const start = new Date(habit.startDate || new Date());
-    const end = habit.endDate ? new Date(habit.endDate) : new Date(new Date().setFullYear(new Date().getFullYear() + 1)); // Default to one year from now if no end date
+    try {
+      const dates = [];
+      const start = new Date(habit.startDate || new Date());
+      const end = habit.endDate ? new Date(habit.endDate) : new Date(new Date().setFullYear(new Date().getFullYear() + 1)); // Default to one year from now if no end date
 
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const dateString = d.toISOString().split('T')[0];
-      const day = d.getDay();
-      if (
-        habit.frequency === 'daily' ||
-        (habit.frequency === 'every-other-day' && d.getDate() % 2 === 0) ||
-        (habit.frequency === 'weekly' && day === 1) || // Assuming weekly is every Monday
-        (habit.frequency === 'custom' && habit.customDays?.includes(day))
-      ) {
-        dates.push(dateString);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateString = d.toISOString().split('T')[0];
+        const day = d.getDay();
+        if (
+          habit.frequency === 'daily' ||
+          (habit.frequency === 'every-other-day' && d.getDate() % 2 === 0) ||
+          (habit.frequency === 'weekly' && day === 1) || // Assuming weekly is every Monday
+          (habit.frequency === 'custom' && habit.customDays?.includes(day))
+        ) {
+          dates.push(dateString);
+        }
       }
-    }
 
-    return dates;
+      return dates;
+    } catch (error) {
+      console.error('Error in getHabitDates for habit:', habit.name, error);
+      return [];
+    }
   };
 
   const getHabitsForDate = (date: string) => {
-    return habits.filter(habit => {
-      const habitDates = getHabitDates(habit);
-      return habitDates.includes(date);
-    });
+    try {
+      console.log("Getting habits for date:", date);
+      console.log("Current habits:", habits);
+      
+      if (!Array.isArray(habits)) {
+        console.error("Habits is not an array:", habits);
+        return [];
+      }
+
+      return habits.filter(habit => {
+        if (!habit) {
+          console.error("Encountered null or undefined habit");
+          return false;
+        }
+        const habitDates = getHabitDates(habit);
+        console.log("Habit dates for", habit.name, ":", habitDates);
+        return habitDates.includes(date);
+      });
+    } catch (error) {
+      console.error('Error in getHabitsForDate:', error);
+      Alert.alert('Error', 'There was an issue loading habits for this date.');
+      return [];
+    }
   };
 
   const toggleHabitCompletion = async (habit: Habit, date: string) => {
     const updatedHabits = habits.map(h => {
       if (h.id === habit.id) {
-        const completedDates = h.completedDates.includes(date)
-          ? h.completedDates.filter(d => d !== date)
-          : [...h.completedDates, date];
-        return { ...h, completedDates };
+        const completedDates = h.completedDates || [];
+        const updatedCompletedDates = completedDates.includes(date)
+          ? completedDates.filter(d => d !== date)
+          : [...completedDates, date];
+        return { ...h, completedDates: updatedCompletedDates };
       }
       return h;
     });
@@ -82,7 +118,7 @@ export default function CalendarScreen({ route, navigation }) {
 
     try {
       await AsyncStorage.setItem('habits', JSON.stringify(updatedHabits));
-      navigation.setParams({ habits: updatedHabits });
+      // Update navigation params if necessary
     } catch (error) {
       console.error('Error updating habit completion:', error);
     }
@@ -142,23 +178,25 @@ export default function CalendarScreen({ route, navigation }) {
       {selectedDate && (
         <View style={styles.habitsContainer}>
           <Text style={styles.dateTitle}>{selectedDate}</Text>
-          <FlatList
-            data={getHabitsForDate(selectedDate)}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item }) => (
-              <View style={[styles.habitItem, { borderLeftColor: item.color, borderLeftWidth: 5 }]}>
-                <View style={styles.habitInfo}>
-                  <Text style={styles.habitName}>{item.name}</Text>
-                  <Text style={styles.habitDescription}>{item.description}</Text>
+          <ErrorBoundary fallback={<Text>Error loading habits for this date.</Text>}>
+            <FlatList
+              data={getHabitsForDate(selectedDate)}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item }) => (
+                <View style={[styles.habitItem, { borderLeftColor: item.color, borderLeftWidth: 5 }]}>
+                  <View style={styles.habitInfo}>
+                    <Text style={styles.habitName}>{item.name}</Text>
+                    <Text style={styles.habitDescription}>{item.description}</Text>
+                  </View>
+                  <Switch
+                    value={(item.completedDates || []).includes(selectedDate)}
+                    onValueChange={() => toggleHabitCompletion(item, selectedDate)}
+                  />
                 </View>
-                <Switch
-                  value={item.completedDates.includes(selectedDate)}
-                  onValueChange={() => toggleHabitCompletion(item, selectedDate)}
-                />
-              </View>
-            )}
-            ListEmptyComponent={<Text>No habits scheduled for this date.</Text>}
-          />
+              )}
+              ListEmptyComponent={<Text>No habits scheduled for this date.</Text>}
+            />
+          </ErrorBoundary>
         </View>
       )}
     </View>
@@ -244,3 +282,22 @@ const styles = StyleSheet.create({
     marginHorizontal: 1,
   },
 });
+
+class ErrorBoundary extends React.Component {
+  state = { hasError: false };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.log('ErrorBoundary caught an error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}

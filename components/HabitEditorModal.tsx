@@ -1,23 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ScrollView, Alert, Switch } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ScrollView, Alert, Switch, TouchableWithoutFeedback, Dimensions } from 'react-native';
 import { Habit } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { lightTheme, darkTheme } from '../styles/theme';
+import ColorPicker from './ColorPicker';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface HabitEditorModalProps {
   isVisible: boolean;
   habit: Habit | null;
   onClose: () => void;
   onSave: (habit: Habit) => void;
-  onDelete: (habitId: number) => void;
+  onDelete: (habitId: string) => void; // Add this line
 }
 
 const COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33F1', '#33FFF1', '#F1FF33'];
 
 const HabitEditorModal: React.FC<HabitEditorModalProps> = ({ isVisible, habit, onClose, onSave, onDelete }) => {
   const [editedHabit, setEditedHabit] = useState<Habit | null>(habit);
+  const [nameInputFocused, setNameInputFocused] = useState(false);
+  const [descriptionInputFocused, setDescriptionInputFocused] = useState(false);
   const { theme } = useTheme();
   const colors = theme === 'light' ? lightTheme : darkTheme;
+  const selectedColor = theme === 'light' ? '#A8D0F0' : '#3993dd';
 
   useEffect(() => {
     setEditedHabit(habit);
@@ -30,56 +36,60 @@ const HabitEditorModal: React.FC<HabitEditorModalProps> = ({ isVisible, habit, o
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      "Delete Habit",
-      "Are you sure you want to delete this habit?",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: () => {
-          if (editedHabit) {
-            onDelete(editedHabit.id);
-          }
-        }}
-      ]
+    if (habit) {
+      onDelete(habit.id);
+      onClose();
+    } else {
+      // Removed addDebugMessage calls
+    }
+  };
+
+  const renderFrequencyPicker = () => {
+    const frequencies = ['daily', 'every-other-day', 'weekly', 'custom'];
+    return (
+      <View>
+        {frequencies.map((freq) => (
+          <TouchableOpacity
+            key={freq}
+            style={[
+              styles.frequencyOption,
+              { backgroundColor: theme === 'dark' ? '#1C1C1C' : colors.secondary },
+              editedHabit?.frequency === freq && { backgroundColor: selectedColor },
+            ]}
+            onPress={() => setEditedHabit({...editedHabit!, frequency: freq as Habit['frequency']})}
+          >
+            <Text style={{ color: colors.text }}>{freq}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     );
   };
 
-  const renderFrequencyPicker = () => (
-    <View>
-      <Text style={[styles.label, { color: colors.text }]}>Frequency:</Text>
-      {['daily', 'every-other-day', 'weekly', 'custom'].map((freq) => (
-        <TouchableOpacity
-          key={freq}
-          style={[
-            styles.frequencyOption, 
-            editedHabit?.frequency === freq && styles.selectedFrequency,
-            { backgroundColor: colors.secondary }
-          ]}
-          onPress={() => setEditedHabit({...editedHabit!, frequency: freq as Habit['frequency']})}
-        >
-          <Text style={{ color: colors.text }}>{freq}</Text>
-        </TouchableOpacity>
-      ))}
-      {editedHabit?.frequency === 'custom' && (
-        <View>
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
-            <View key={day} style={styles.customDayRow}>
-              <Text style={{ color: colors.text }}>{day}</Text>
-              <Switch
-                value={editedHabit?.customDays?.includes(index)}
-                onValueChange={(value) => {
-                  const newCustomDays = value
-                    ? [...(editedHabit?.customDays || []), index]
-                    : editedHabit?.customDays?.filter(d => d !== index) || [];
-                  setEditedHabit({...editedHabit!, customDays: newCustomDays});
-                }}
-              />
-            </View>
-          ))}
-        </View>
-      )}
-    </View>
-  );
+  const renderCustomDaysPicker = () => {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return (
+      <View style={styles.customDaysContainer}>
+        {days.map((day) => (
+          <TouchableOpacity
+            key={day}
+            style={[
+              styles.dayOption,
+              { backgroundColor: theme === 'dark' ? '#1C1C1C' : colors.secondary },
+              editedHabit?.customDays.includes(day) && { backgroundColor: selectedColor },
+            ]}
+            onPress={() => {
+              const updatedDays = editedHabit?.customDays.includes(day)
+                ? editedHabit.customDays.filter(d => d !== day)
+                : [...(editedHabit?.customDays || []), day];
+              setEditedHabit({...editedHabit!, customDays: updatedDays});
+            }}
+          >
+            <Text style={{ color: colors.text }}>{day}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
 
   const renderColorPicker = () => (
     <View style={styles.colorPickerContainer}>
@@ -116,42 +126,64 @@ const HabitEditorModal: React.FC<HabitEditorModalProps> = ({ isVisible, habit, o
       visible={isVisible}
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
-          <ScrollView 
-            style={styles.scrollView}
-            contentContainerStyle={styles.contentContainer}
-            className="scrollView"
-          >
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Edit Habit</Text>
-            <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.secondary }]}
-              placeholder="Habit name"
-              placeholderTextColor={colors.text}
-              value={editedHabit.name}
-              onChangeText={(text) => setEditedHabit({...editedHabit, name: text})}
-            />
-            <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.secondary }]}
-              placeholder="Habit description"
-              placeholderTextColor={colors.text}
-              value={editedHabit.description}
-              onChangeText={(text) => setEditedHabit({...editedHabit, description: text})}
-            />
-            {renderFrequencyPicker()}
-            {renderColorPicker()}
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.buttonText}>Save Changes</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-              <Text style={styles.buttonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-              <Text style={styles.buttonText}>Delete Habit</Text>
-            </TouchableOpacity>
-          </ScrollView>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={styles.modalOverlay}>
+          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+              <ScrollView contentContainerStyle={styles.scrollViewContent}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>Edit Habit</Text>
+                <TextInput
+                  style={[
+                    styles.input, 
+                    { 
+                      color: colors.text, 
+                      backgroundColor: theme === 'dark' ? '#1C1C1C' : colors.background,
+                      borderColor: nameInputFocused ? '#3993dd' : 'transparent',
+                      borderWidth: 1,
+                    }
+                  ]}
+                  placeholder="Habit name"
+                  placeholderTextColor={colors.placeholder}
+                  value={editedHabit?.name}
+                  onChangeText={(text) => setEditedHabit({...editedHabit!, name: text})}
+                  onFocus={() => setNameInputFocused(true)}
+                  onBlur={() => setNameInputFocused(false)}
+                />
+                <TextInput
+                  style={[
+                    styles.input, 
+                    { 
+                      color: colors.text, 
+                      backgroundColor: theme === 'dark' ? '#1C1C1C' : colors.background,
+                      borderColor: descriptionInputFocused ? '#3993dd' : 'transparent',
+                      borderWidth: 1,
+                    }
+                  ]}
+                  placeholder="Habit description"
+                  placeholderTextColor={colors.placeholder}
+                  value={editedHabit?.description}
+                  onChangeText={(text) => setEditedHabit({...editedHabit!, description: text})}
+                  onFocus={() => setDescriptionInputFocused(true)}
+                  onBlur={() => setDescriptionInputFocused(false)}
+                />
+                {renderFrequencyPicker()}
+                {renderColorPicker()}
+              </ScrollView>
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+                  <Text style={styles.buttonText}>Save Changes</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+                  <Text style={styles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+                  <Text style={styles.buttonText}>Delete Habit</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
         </View>
-      </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 };
@@ -164,16 +196,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContainer: {
-    width: '90%',
-    maxWidth: 400,
+    width: SCREEN_WIDTH * 0.9,
+    maxHeight: SCREEN_HEIGHT * 0.9,
     borderRadius: 20,
     padding: 20,
+    justifyContent: 'space-between',
   },
-  scrollView: {
-    maxHeight: '80%',
+  scrollViewContent: {
+    flexGrow: 1,
   },
-  contentContainer: {
-    paddingBottom: 20,
+  buttonContainer: {
+    marginTop: 10,
   },
   modalTitle: {
     fontSize: 24,
@@ -181,10 +214,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   input: {
-    borderWidth: 1,
     padding: 10,
     marginBottom: 10,
     borderRadius: 5,
+    fontSize: 16,
+    borderWidth: 1, // Changed from 2 to 1
+    borderColor: 'transparent',
   },
   label: {
     fontSize: 16,
@@ -195,8 +230,12 @@ const styles = StyleSheet.create({
     marginVertical: 5,
     borderRadius: 5,
   },
-  selectedFrequency: {
-    backgroundColor: '#3c6e71',
+  dayOption: {
+    padding: 10,
+    marginVertical: 5,
+    borderRadius: 5,
+    width: '13%',
+    alignItems: 'center',
   },
   customDayRow: {
     flexDirection: 'row',
@@ -225,15 +264,15 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     backgroundColor: '#4CAF50',
-    padding: 10,
+    padding: 15,
     borderRadius: 5,
-    marginTop: 10,
+    marginBottom: 10,
   },
   cancelButton: {
     backgroundColor: '#f44336',
-    padding: 10,
+    padding: 15,
     borderRadius: 5,
-    marginTop: 10,
+    marginBottom: 10,
   },
   deleteButton: {
     backgroundColor: '#FF0000',
@@ -245,6 +284,7 @@ const styles = StyleSheet.create({
     color: 'white',
     textAlign: 'center',
     fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

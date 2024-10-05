@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, Modal, Switch, ScrollView, Dimensions } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, Modal, Switch, ScrollView, Dimensions, TouchableWithoutFeedback } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Habit } from '../types';
 import HabitEditorModal from '../components/HabitEditorModal';
 import { useTheme } from '../context/ThemeContext';
 import { lightTheme, darkTheme } from '../styles/theme';
+import AddHabitModal from '../components/AddHabitModal';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -13,9 +14,9 @@ const COLORS = ['#FF5733', '#33FF57', '#3357FF', '#FF33F1', '#33FFF1', '#F1FF33'
 
 export default function HomeScreen({ navigation }) {
   const [habits, setHabits] = useState<Habit[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
   const [newHabitName, setNewHabitName] = useState('');
   const [newHabitDescription, setNewHabitDescription] = useState('');
-  const [modalVisible, setModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
   const [frequency, setFrequency] = useState<Habit['frequency']>('daily');
@@ -32,46 +33,27 @@ export default function HomeScreen({ navigation }) {
     loadHabits();
   }, []);
 
+  useEffect(() => {
+    console.log("Habits state updated:", habits);
+  }, [habits]);
+
   const loadHabits = async () => {
     try {
       const storedHabits = await AsyncStorage.getItem('habits');
+      console.log("Stored habits:", storedHabits);
       if (storedHabits) {
-        setHabits(JSON.parse(storedHabits));
+        const parsedHabits = JSON.parse(storedHabits);
+        console.log("Parsed habits:", parsedHabits);
+        setHabits(parsedHabits);
       }
     } catch (error) {
       console.error('Error loading habits:', error);
     }
   };
 
-  const addHabit = async () => {
-    if (newHabitName.trim()) {
-      const newHabit: Habit = {
-        id: Date.now(),
-        name: newHabitName.trim(),
-        description: newHabitDescription.trim(),
-        frequency,
-        customDays: frequency === 'custom' ? customDays : undefined,
-        startDate: new Date().toISOString().split('T')[0], // Add this line
-        endDate: endDate ? endDate.toISOString().split('T')[0] : undefined,
-        color,
-        completedDates: [],
-      };
-      const updatedHabits = [...habits, newHabit];
-      setHabits(updatedHabits);
-      try {
-        await AsyncStorage.setItem('habits', JSON.stringify(updatedHabits));
-        setNewHabitName('');
-        setNewHabitDescription('');
-        setFrequency('daily');
-        setCustomDays([]);
-        setEndDate(null);
-        setColor('#3b72e8');
-        setCustomColor('');
-        setModalVisible(false);
-      } catch (error) {
-        console.error('Error saving habit:', error);
-      }
-    }
+  const handleAddHabit = (newHabit: Habit) => {
+    setHabits(prevHabits => [...prevHabits, newHabit]);
+    // Here you might want to save the updated habits to AsyncStorage or your backend
   };
 
   const editHabit = async () => {
@@ -90,10 +72,10 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  const deleteHabit = async (habitId: number) => {
-    const updatedHabits = habits.filter(habit => habit.id !== habitId);
-    setHabits(updatedHabits);
+  const handleDeleteHabit = async (habitId: string) => {
     try {
+      const updatedHabits = habits.filter(habit => habit.id !== habitId);
+      setHabits(updatedHabits);
       await AsyncStorage.setItem('habits', JSON.stringify(updatedHabits));
     } catch (error) {
       console.error('Error deleting habit:', error);
@@ -225,16 +207,10 @@ export default function HomeScreen({ navigation }) {
     setEditingHabit(null);
   };
 
-  const handleDeleteHabit = async (habitId: number) => {
-    const updatedHabits = habits.filter(habit => habit.id !== habitId);
-    setHabits(updatedHabits);
-    try {
-      await AsyncStorage.setItem('habits', JSON.stringify(updatedHabits));
-      setIsEditorVisible(false);
-      setEditingHabit(null);
-    } catch (error) {
-      console.error('Error deleting habit:', error);
-    }
+  const openEditor = (habit: Habit) => {
+    console.log("Opening editor for habit:", habit);
+    setEditingHabit(habit);
+    setIsEditorVisible(true);
   };
 
   const renderHabitItem = ({ item }: { item: Habit }) => (
@@ -243,7 +219,7 @@ export default function HomeScreen({ navigation }) {
         styles.habitItem, 
         { backgroundColor: theme === 'light' ? '#ffffff' : '#1C1C1C' }
       ]}
-      onPress={() => handleEditHabit(item)}
+      onPress={() => openEditor(item)}
     >
       <View style={[styles.habitColor, { backgroundColor: item.color }]} />
       <View style={styles.habitContent}>
@@ -276,65 +252,22 @@ export default function HomeScreen({ navigation }) {
       <FlatList
         data={habits}
         renderItem={renderHabitItem}
-        keyExtractor={item => item.id.toString()}
+        keyExtractor={(item) => item.id}
+        key={habits.length} // This will force a re-render when the number of habits changes
       />
       <TouchableOpacity
         style={[styles.calendarButton, { backgroundColor: colors.accent }]}
-        onPress={() => navigation.navigate('Calendar', { habits })}
+        onPress={() => navigation.navigate('Calendar', { habits: habits })}
       >
         <Text style={styles.calendarButtonText}>Go to Calendar</Text>
       </TouchableOpacity>
 
-      {/* Add Habit Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <ScrollView contentContainerStyle={styles.scrollViewContent}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Add New Habit</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Habit name"
-                  value={newHabitName}
-                  onChangeText={setNewHabitName}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Habit description"
-                  value={newHabitDescription}
-                  onChangeText={setNewHabitDescription}
-                />
-                {renderFrequencyPicker()}
-                {renderColorPicker()}
-                <TouchableOpacity onPress={() => setEndDate(new Date())}>
-                  <Text>Set End Date</Text>
-                </TouchableOpacity>
-                {endDate && (
-                  <DateTimePicker
-                    value={endDate}
-                    mode="date"
-                    display="default"
-                    onChange={(event, selectedDate) => setEndDate(selectedDate || endDate)}
-                  />
-                )}
-                <TouchableOpacity style={styles.addButton} onPress={addHabit}>
-                  <Text style={styles.addButtonText}>Add Habit</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      <AddHabitModal
+        isVisible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onSave={handleAddHabit}
+      />
 
-      {/* Edit Habit Modal */}
       <HabitEditorModal
         isVisible={isEditorVisible}
         habit={editingHabit}
@@ -511,21 +444,55 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContainer: {
-    width: '90%',
-    maxWidth: 400, // Add a max width to prevent it from getting too wide on large screens
-    maxHeight: SCREEN_HEIGHT * 0.8,
-    backgroundColor: 'white',
+    width: SCREEN_WIDTH * 0.9,
+    maxHeight: SCREEN_HEIGHT * 0.9,
     borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  modalContent: {
     padding: 20,
+    justifyContent: 'space-between',
+  },
+  scrollView: {
+    maxHeight: SCREEN_HEIGHT * 0.7,
+  },
+  contentContainer: {
+    paddingBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  input: {
+    padding: 10,
+    marginBottom: 10,
+    borderRadius: 5,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  label: {
+    fontSize: 16,
+    marginBottom: 5,
+    marginTop: 10,
+  },
+  saveButton: {
+    backgroundColor: '#4CAF50',
+    padding: 15,
+    borderRadius: 5,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  cancelButton: {
+    backgroundColor: '#f44336',
+    padding: 15,
+    borderRadius: 5,
+  },
+  buttonText: {
+    color: 'white',
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  buttonContainer: {
+    marginTop: 10,
   },
 });
