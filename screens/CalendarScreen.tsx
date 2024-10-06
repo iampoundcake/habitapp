@@ -4,6 +4,8 @@ import { Calendar, DateData, LocaleConfig } from 'react-native-calendars';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Habit } from '../types';
 import { Alert } from 'react-native';
+import { useTheme } from '../context/ThemeContext';
+import { lightTheme, darkTheme } from '../styles/theme';
 
 // You can customize the locale if needed
 LocaleConfig.locales['en'] = {
@@ -15,6 +17,9 @@ LocaleConfig.locales['en'] = {
 LocaleConfig.defaultLocale = 'en';
 
 export default function CalendarScreen({ route }) {
+  const { theme } = useTheme();
+  const colors = theme === 'light' ? lightTheme : darkTheme;
+
   console.log("CalendarScreen rendered", route.params);
   const [habits, setHabits] = useState<Habit[]>(route.params?.habits || []);
   const [selectedDate, setSelectedDate] = useState('');
@@ -132,6 +137,7 @@ export default function CalendarScreen({ route }) {
           styles.dayContainer,
           isSelected && styles.selectedDay,
           state === 'disabled' && styles.disabledDay,
+          { backgroundColor: isSelected ? colors.accent : colors.background }
         ]}
         onPress={() => setSelectedDate(date.dateString)}
       >
@@ -139,6 +145,7 @@ export default function CalendarScreen({ route }) {
           styles.dayText,
           isSelected && styles.selectedDayText,
           state === 'disabled' && styles.disabledDayText,
+          { color: colors.text }
         ]}>
           {date.day}
         </Text>
@@ -154,47 +161,58 @@ export default function CalendarScreen({ route }) {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Habit Calendar</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.title, { color: colors.text }]}>Habit Calendar</Text>
       <Calendar
         markedDates={markedDates}
         onDayPress={(day: DateData) => setSelectedDate(day.dateString)}
         enableSwipeMonths={true}
         renderArrow={(direction) => (
-          <Text style={styles.arrow}>{direction === 'left' ? '←' : '→'}</Text>
+          <Text style={[styles.arrow, { color: colors.text }]}>{direction === 'left' ? '←' : '→'}</Text>
         )}
         monthFormat={'MMMM yyyy'}
         dayComponent={CustomDay}
         theme={{
-          arrowColor: '#3b72e8',
-          monthTextColor: '#3b72e8',
+          calendarBackground: colors.background,
+          textSectionTitleColor: colors.text,
+          monthTextColor: colors.text,
           textMonthFontSize: 18,
           textMonthFontWeight: 'bold',
-          todayTextColor: '#3b72e8',
           textDayHeaderFontWeight: '300',
           textDayHeaderFontSize: 14,
+          textDayFontColor: colors.text,
+          todayTextColor: colors.accent,
         }}
       />
       {selectedDate && (
         <View style={styles.habitsContainer}>
-          <Text style={styles.dateTitle}>{selectedDate}</Text>
-          <ErrorBoundary fallback={<Text>Error loading habits for this date.</Text>}>
+          <Text style={[styles.dateTitle, { color: colors.text }]}>{selectedDate}</Text>
+          <ErrorBoundary fallback={<Text style={{ color: colors.text }}>Error loading habits for this date.</Text>}>
             <FlatList
               data={getHabitsForDate(selectedDate)}
               keyExtractor={(item) => item.id.toString()}
               renderItem={({ item }) => (
-                <View style={[styles.habitItem, { borderLeftColor: item.color, borderLeftWidth: 5 }]}>
+                <View style={[
+                  styles.habitItem,
+                  { 
+                    borderLeftColor: item.color,
+                    borderLeftWidth: 5,
+                    backgroundColor: theme === 'dark' ? '#1C1C1C' : '#f5f3f4'
+                  }
+                ]}>
                   <View style={styles.habitInfo}>
-                    <Text style={styles.habitName}>{item.name}</Text>
-                    <Text style={styles.habitDescription}>{item.description}</Text>
+                    <Text style={[styles.habitName, { color: colors.text }]}>{item.name}</Text>
+                    <Text style={[styles.habitDescription, { color: colors.text }]}>{item.description}</Text>
                   </View>
                   <Switch
                     value={(item.completedDates || []).includes(selectedDate)}
                     onValueChange={() => toggleHabitCompletion(item, selectedDate)}
+                    trackColor={{ false: "#767577", true: "#81b0ff" }}
+                    thumbColor={(item.completedDates || []).includes(selectedDate) ? "#f5dd4b" : "#f4f3f4"}
                   />
                 </View>
               )}
-              ListEmptyComponent={<Text>No habits scheduled for this date.</Text>}
+              ListEmptyComponent={<Text style={{ color: colors.text }}>No habits scheduled for this date.</Text>}
             />
           </ErrorBoundary>
         </View>
@@ -207,13 +225,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#ffffff',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
-    color: '#353535',
   },
   habitsContainer: {
     marginTop: 20,
@@ -229,7 +245,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 10,
     marginVertical: 5,
-    backgroundColor: '#f5f3f4',
     borderRadius: 5,
   },
   habitInfo: {
@@ -238,15 +253,12 @@ const styles = StyleSheet.create({
   habitName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#353535',
   },
   habitDescription: {
     fontSize: 14,
-    color: '#353535',
   },
   arrow: {
     fontSize: 24,
-    color: '#3b72e8',
   },
   dayContainer: {
     width: 32,
@@ -262,11 +274,9 @@ const styles = StyleSheet.create({
   },
   dayText: {
     textAlign: 'center',
-    color: '#2d4150',
   },
   selectedDayText: {
     fontWeight: 'bold',
-    color: '#000000',
   },
   disabledDayText: {
     color: '#d9e1e8',

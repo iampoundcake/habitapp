@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, ScrollView, TouchableWithoutFeedback, Dimensions, Alert } from 'react-native';
 import { Habit } from '../types';
 import { useTheme } from '../context/ThemeContext';
@@ -25,6 +25,7 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({ isVisible, onClose, onSav
     completedDates: [] // Initialize this
   });
   const [customColor, setCustomColor] = useState('');
+  const [modalDimensions, setModalDimensions] = useState({ width: 0, height: 0 });
 
   const { theme } = useTheme();
   const colors = theme === 'light' ? lightTheme : darkTheme;
@@ -110,6 +111,20 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({ isVisible, onClose, onSav
     setNewHabit({...newHabit, color});
   };
 
+  const updateModalDimensions = () => {
+    const { width, height } = Dimensions.get('window');
+    setModalDimensions({
+      width: width * 0.9,
+      height: height * 0.9,
+    });
+  };
+
+  useEffect(() => {
+    updateModalDimensions();
+    const subscription = Dimensions.addEventListener('change', updateModalDimensions);
+    return () => subscription.remove();
+  }, []);
+
   return (
     <Modal
       animationType="fade"
@@ -120,7 +135,14 @@ const AddHabitModal: React.FC<AddHabitModalProps> = ({ isVisible, onClose, onSav
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.modalOverlay}>
           <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-            <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+            <View style={[
+              styles.modalContainer, 
+              { 
+                backgroundColor: colors.background,
+                width: modalDimensions.width,
+                maxHeight: modalDimensions.height,
+              }
+            ]}>
               <ScrollView contentContainerStyle={styles.scrollViewContent}>
                 <Text style={[styles.modalTitle, { color: colors.text }]}>Add New Habit</Text>
                 <TextInput
@@ -182,8 +204,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContainer: {
-    width: SCREEN_WIDTH * 0.9,
-    maxHeight: SCREEN_HEIGHT * 0.9,
     borderRadius: 20,
     padding: 20,
     justifyContent: 'space-between',

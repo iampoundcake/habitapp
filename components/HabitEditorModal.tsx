@@ -25,6 +25,24 @@ const HabitEditorModal: React.FC<HabitEditorModalProps> = ({ isVisible, habit, o
   const colors = theme === 'light' ? lightTheme : darkTheme;
   const selectedColor = theme === 'light' ? '#A8D0F0' : '#3993dd';
 
+  const [modalDimensions, setModalDimensions] = useState({ width: 0, height: 0 });
+
+  const updateModalDimensions = () => {
+    const { width, height } = Dimensions.get('window');
+    setModalDimensions({
+      width: width * 0.9,
+      height: height * 0.9,
+    });
+  };
+
+  useEffect(() => {
+    updateModalDimensions();
+    Dimensions.addEventListener('change', updateModalDimensions);
+    return () => {
+      Dimensions.removeEventListener('change', updateModalDimensions);
+    };
+  }, []);
+
   useEffect(() => {
     setEditedHabit(habit);
   }, [habit]);
@@ -129,7 +147,14 @@ const HabitEditorModal: React.FC<HabitEditorModalProps> = ({ isVisible, habit, o
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.modalOverlay}>
           <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-            <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+            <View style={[
+              styles.modalContainer, 
+              { 
+                backgroundColor: colors.background,
+                width: modalDimensions.width,
+                maxHeight: modalDimensions.height,
+              }
+            ]}>
               <ScrollView contentContainerStyle={styles.scrollViewContent}>
                 <Text style={[styles.modalTitle, { color: colors.text }]}>Edit Habit</Text>
                 <TextInput
@@ -196,8 +221,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContainer: {
-    width: SCREEN_WIDTH * 0.9,
-    maxHeight: SCREEN_HEIGHT * 0.9,
     borderRadius: 20,
     padding: 20,
     justifyContent: 'space-between',
